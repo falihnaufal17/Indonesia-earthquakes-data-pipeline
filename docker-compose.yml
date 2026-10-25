@@ -1,0 +1,39 @@
+# Orchestration (Dagster) + visualisation (Superset).
+# ClickHouse runs from its own compose file and is reachable as `clickhouse_server`
+# on the shared external network:  docker network create data_pipeline_net
+services:
+  dagster:
+    build: ./dagster
+    container_name: dagster_orchestrator
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+      EARTHQUAKE_CSV_PATH: /opt/dagster/data/katalog_gempa.csv
+      DBT_PROFILES_DIR: /opt/dagster/app/earthquake_dbt
+    volumes:
+      - ./dagster_project:/opt/dagster/app
+      - ./ingestion-file:/opt/dagster/data:ro
+      - dagster_home:/opt/dagster/dagster_home
+    networks:
+      - data_pipeline_net
+
+  superset:
+    build: ./superset
+    container_name: superset_viz
+    ports:
+      - "8088:8088"
+    env_file: .env
+    volumes:
+      - superset_home:/app/superset_home
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+    networks:
+      - data_pipeline_net
+
+networks:
+  data_pipeline_net:
+    external: true
+
+volumes:
+  dagster_home:
+  superset_home:

@@ -1,0 +1,12 @@
+earthquake_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: clickhouse
+      schema: "{{ env_var('CLICKHOUSE_DB', 'mydb') }}"
+      host: "{{ env_var('CLICKHOUSE_HOST', 'clickhouse_server') }}"
+      port: "{{ env_var('CLICKHOUSE_PORT', '8123') | as_number }}"
+      user: "{{ env_var('CLICKHOUSE_USER', 'myuser') }}"
+      password: "{{ env_var('CLICKHOUSE_PASSWORD', 'mypassword') }}"
+      secure: False
+      threads: 4

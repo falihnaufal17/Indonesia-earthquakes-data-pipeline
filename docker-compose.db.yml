@@ -1,0 +1,18 @@
+services:
+  clickhouse_server:
+    image: clickhouse/clickhouse-server:latest-alpine
+    container_name: clickhouse_server
+    environment:
+      CLICKHOUSE_USER: myuser
+      CLICKHOUSE_PASSWORD: mypassword
+      CLICKHOUSE_DB: mydb
+    ports:
+      - "8123:8123" 
+      - "9000:9000" 
+    restart: always
+    networks:
+      - data_pipeline_net # Added this
+
+networks:
+  data_pipeline_net:
+    external: true

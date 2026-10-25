@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: Raw landing zone. Loaded by the Dagster `raw_earthquakes` asset, untouched.
+    schema: "{{ target.schema }}"  # ClickHouse database (mydb)
+    tables:
+      - name: raw_earthquakes
+        description: BMKG earthquake catalogue (katalog_gempa.csv), every column stored as String.
+        loaded_at_field: _ingested_at
+        freshness:
+          warn_after: {count: 1, period: day}
+        columns:
+          - name: tgl
+            tests: [not_null]
+          - name: ot
+            tests: [not_null]
+          - name: lat
+            tests: [not_null]
+          - name: lon
+            tests: [not_null]
+          - name: depth
+            tests: [not_null]
+          - name: mag
+            tests: [not_null]

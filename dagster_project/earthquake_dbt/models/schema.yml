@@ -1,0 +1,213 @@
+version: 2
+
+models:
+  - name: stg_earthquakes
+    description: Typed, validated and de-duplicated earthquake events (view).
+    columns:
+      - name: earthquake_id
+        tests: [unique, not_null]
+      - name: event_time
+        tests: [not_null]
+
+  - name: dim_location
+    description: One row per BMKG region name.
+    columns:
+      - name: location_key
+        tests: [unique, not_null]
+      - name: region_name
+        tests: [unique, not_null]
+
+  - name: dim_date
+    description: Calendar dimension covering the catalogue period.
+    columns:
+      - name: date_key
+        tests: [unique, not_null]
+
+  - name: fact_earthquake
+    description: One row per earthquake event.
+    columns:
+      - name: earthquake_id
+        tests: [unique, not_null]
+      - name: date_key
+        tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_date'), field: date_key}
+      - name: location_key
+        tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_location'), field: location_key}
+      - name: magnitude
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 10}
+      - name: depth_km
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 800}
+      - name: latitude
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: -90, max_value: 90}
+      - name: longitude
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: -180, max_value: 180}
+
+  - name: obt_earthquake_analytics
+    description: >
+      "One Big Table" view (`view_earthquake_analytics_master`) for BI tools such as Superset.
+      One row per de-duplicated earthquake event, with the fact joined to the location and date
+      dimensions so no further joins are needed. A view, so it always reflects the current Silver tables.
+    columns:
+      - name: earthquake_id
+        description: Surrogate key of the event (hash of event time, latitude and longitude).
+        tests: [unique, not_null]
+      - name: event_time
+        description: Origin time of the earthquake (UTC).
+      - name: event_date
+        description: Calendar date of the event (UTC).
+      - name: year
+        description: Calendar year of the event.
+      - name: quarter
+        description: Calendar quarter of the event (1-4).
+      - name: month
+        description: Calendar month number (1-12).
+      - name: month_name
+        description: Month name in Indonesian.
+      - name: month_start
+        description: First day of the event's month; used as the time-series axis.
+      - name: year_month
+        description: Year and month formatted as `YYYY-MM`.
+      - name: day_of_week_name
+        description: Day of the week in Indonesian.
+      - name: is_weekend
+        description: 1 if the event happened on a Saturday or Sunday, otherwise 0.
+      - name: region_name
+        description: BMKG region name where the earthquake occurred.
+      - name: latitude
+        description: Epicentre latitude in decimal degrees (negative = south).
+      - name: longitude
+        description: Epicentre longitude in decimal degrees.
+      - name: depth_km
+        description: Hypocentre depth in kilometres.
+      - name: magnitude
+        description: Earthquake magnitude.
+      - name: magnitude_class
+        description: Magnitude band (Mikro <3, Kecil 3-3.9, Ringan 4-4.9, Sedang 5-5.9, Kuat 6-6.9, Besar 7+).
+      - name: depth_class
+        description: Depth band (Dangkal <70 km, Menengah 70-300 km, Dalam 300+ km).
+      - name: ingested_at
+        description: When the source row was loaded into the Bronze layer.
+
+  - name: mart_monthly_trends
+    description: >
+      Time-series mart with one row per calendar month between the first and last event
+      (about 160 months). Summarises how many earthquakes occurred and how strong and deep they were.
+      Feeds the monthly frequency and magnitude line charts. Rebuilt in full on every dbt run.
+    columns:
+      - name: month_start
+        description: First day of the month; one row per month.
+        tests: [unique, not_null]
+      - name: year
+        description: Calendar year of the month.
+      - name: month
+        description: Calendar month number (1-12).
+      - name: total_earthquakes
+        description: Number of earthquakes recorded in the month.
+        tests:
+          - accepted_range:
+              arguments: {min_value: 1}
+      - name: avg_magnitude
+        description: Mean magnitude of the month's earthquakes, rounded to 2 decimals.
+      - name: max_magnitude
+        description: Strongest earthquake of the month.
+      - name: avg_depth_km
+        description: Mean hypocentre depth in kilometres, rounded to 1 decimal.
+      - name: significant_earthquakes
+        description: Number of earthquakes with magnitude 5.0 or higher.
+
+  - name: mart_regional_risk
+    description: >
+      Geospatial risk mart with one row per BMKG region (about 51 regions) over the whole
+      catalogue period. Combines event counts, depth and strength so regions can be compared.
+      It has no year column, so it does not respond to the dashboard's year filter;
+      use `mart_regional_yearly_ranking` for per-year comparisons.
+    columns:
+      - name: region_name
+        description: BMKG region name.
+        tests: [unique, not_null]
+      - name: centroid_latitude
+        description: Average latitude of the region's events (map position).
+      - name: centroid_longitude
+        description: Average longitude of the region's events (map position).
+      - name: total_earthquakes
+        description: Number of earthquakes recorded in the region.
+        tests:
+          - accepted_range:
+              arguments: {min_value: 1}
+      - name: avg_depth_km
+        description: Mean hypocentre depth in kilometres, rounded to 1 decimal.
+      - name: avg_magnitude
+        description: Mean magnitude, rounded to 2 decimals.
+      - name: max_magnitude
+        description: Strongest earthquake recorded in the region.
+      - name: significant_earthquakes
+        description: Number of earthquakes with magnitude 5.0 or higher.
+      - name: pct_shallow
+        description: Percentage of the region's earthquakes shallower than 70 km (the most damaging depth band).
+
+  - name: mart_regional_yearly_ranking
+    description: >
+      Ranking mart with one row per region per year in which the region had earthquakes.
+      Regions are ranked within each year by earthquake count (rank 1 = most earthquakes; ties share a rank).
+      Feeds the "top regions per year" table. 2008 (data starts in November) and 2023
+      (data ends on 26 January) are partial years, so their counts are not comparable with full years.
+    columns:
+      - name: year
+        description: Calendar year.
+        tests: [not_null]
+      - name: region_name
+        description: BMKG region name.
+        tests: [not_null]
+      - name: total_earthquakes
+        description: Number of earthquakes in the region during that year.
+      - name: avg_magnitude
+        description: Mean magnitude in that year, rounded to 2 decimals.
+      - name: max_magnitude
+        description: Strongest earthquake in that year.
+      - name: significant_earthquakes
+        description: Number of earthquakes with magnitude 5.0 or higher in that year.
+      - name: rank_in_year
+        description: Position of the region within its year by earthquake count (1 = highest).
+        tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 1}
+
+  - name: meta_data_freshness
+    description: >
+      Single-row metadata table for analysts: when the pipeline last refreshed, which period the data
+      covers, and how many source rows were dropped. `refreshed_at` is set when dbt runs, so it only
+      advances after a successful build. Test results per run are stored separately in `meta_dq_results`.
+    columns:
+      - name: refreshed_at
+        description: Time of the dbt run that produced this table (last successful refresh).
+        tests: [not_null]
+      - name: last_ingested_at
+        description: Latest time a source row was loaded into the Bronze layer.
+      - name: earliest_event_time
+        description: Origin time of the oldest earthquake in the data.
+      - name: latest_event_time
+        description: Origin time of the newest earthquake in the data.
+      - name: fact_rows
+        description: Number of rows in the fact table after cleaning and de-duplication.
+      - name: bronze_rows
+        description: Number of raw rows loaded from the CSV.
+      - name: rows_rejected_or_deduplicated
+        description: Raw rows not carried into the fact table (invalid values or duplicate events).

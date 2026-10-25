@@ -1,0 +1,19 @@
+name: earthquake_dbt
+version: '1.0.0'
+config-version: 2
+profile: earthquake_dbt
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+# All layers live in one ClickHouse database; the layer is encoded in the
+# table name (raw_*, silver_*, gold = bare mart/view names).
+models:
+  earthquake_dbt:
+    silver:
+      +materialized: table
+    gold:
+      +materialized: table

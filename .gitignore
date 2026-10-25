@@ -1,0 +1,24 @@
+# Secrets - copy .env.example to .env locally
+.env
+
+# dbt generated artifacts
+dagster_project/earthquake_dbt/target/
+dagster_project/earthquake_dbt/logs/
+dagster_project/earthquake_dbt/dbt_packages/
+dagster_project/earthquake_dbt/.user.yml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Dagster local state (if run outside Docker)
+dagster_home/
+.dagster/
+tmp*/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

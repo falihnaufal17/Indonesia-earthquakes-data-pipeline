@@ -1,0 +1,8 @@
+dagster==1.13.26
+dagster-webserver==1.13.26
+dagster-dbt==0.29.26
+dbt-core==1.12.6
+dbt-clickhouse==1.10.3
+clickhouse-connect==1.11.0
+pandas
+tabulate
